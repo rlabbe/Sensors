@@ -25,6 +25,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
     public static final String EXTRA_MESSAGE = "com.example.myfirstapp.MESSAGE";
@@ -35,7 +36,8 @@ public class MainActivity extends AppCompatActivity {
     public TextView editAy;
     public TextView editAz;
     public TextView editText;
-    private FileOutputStream csvFile;
+    private FileOutputStream csvStream;
+    private String csvFilePath;
     boolean running = false;
     Button playButton;
 
@@ -46,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
 
         int MY_PERMISSIONS_REQUEST_READ_CONTACTS = 0;
 
+        // Make sure we are allowed to write to storage.
         ActivityCompat.requestPermissions(this,
                 new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
                 MY_PERMISSIONS_REQUEST_READ_CONTACTS);
@@ -58,12 +61,12 @@ public class MainActivity extends AppCompatActivity {
         editAz = (TextView) findViewById(R.id.editText4);
         playButton =  (Button)findViewById(R.id.button);
 
-
         playButton.setText("Record");
         editText.setText("time: ");
         editAx.setText("x: ");
         editAy.setText("y: ");
         editAz.setText("z: ");
+
         // open and close to force new file to be written with header. Pressing button just
         // appends to this file
         OpenFile(false);
@@ -71,36 +74,38 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void OpenFile(boolean append) {
-        File path = new File(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS), "Sensors");
-        path.mkdirs();
+        File csvFile = new File(Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS), "sensors.csv");
 
-        Intent mediaScannerIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-        Uri fileContentUri = Uri.fromFile(path);
-        mediaScannerIntent.setData(fileContentUri);
-        this.sendBroadcast(mediaScannerIntent);
+        // save file name so we can scan for changes when file is closed to allow Windows to
+        // see the file.
+        csvFilePath = csvFile.getAbsolutePath();
 
-        File file = new File(path, "sensors.txt");
         try {
-            csvFile = new FileOutputStream(file, append);
+            csvStream = new FileOutputStream(csvFile, append);
             if (!append)
-                csvFile.write("time, ax, ay, az\n".getBytes());
+                csvStream.write("time, ax, ay, az\n".getBytes());
         } catch (IOException e) {
             Toast.makeText(this, "exception", Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
 
+
     public void CloseFile() {
-        if (csvFile != null) {
+        if (csvStream != null) {
             try {
-                csvFile.close();
+                csvStream.close();
+                // If we don't scan for changes Windows never 'sees' the file via USB.
+                MediaScannerConnection.scanFile (this, new String[] { csvFilePath }, null, null);
+
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
 
+    /** handle buttons */
     public void sendMessage(View view) {
         switch (view.getId()) {
             case R.id.button:
@@ -120,21 +125,18 @@ public class MainActivity extends AppCompatActivity {
             if (mAccelerometer != null) {
                 OpenFile(true);
                 sensorService.registerListener(mySensorEventListener, mAccelerometer,
-                        SensorManager.SENSOR_DELAY_GAME);
+                        SensorManager.SENSOR_DELAY_FASTEST);
                 Log.i("Compass MainActivity", "Registerered for ACCELEROMETER Sensor");
-                Toast.makeText(this, "ACCELEROMETER Sensor found",
-                       Toast.LENGTH_SHORT).show();
                 running = true;
                 playButton.setText("Recording");
             } else {
                 Log.e("Compass MainActivity", "Registerered for ACCELEROMETER Sensor");
                 Toast.makeText(this, "ACCELEROMETER Sensor not found", Toast.LENGTH_LONG).show();
-                finish();
             }
         } else {
             running = false;
             sensorService.unregisterListener(mySensorEventListener, mAccelerometer);
-            Toast.makeText(this, "Stopped", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Recording Stopped", Toast.LENGTH_LONG).show();
             CloseFile();
             playButton.setText("Record");
         }
@@ -171,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 // 9 decimals is lossless for float
                 String s = String.format("%d, %.9f, %.9f, %.9f\n", time, ax, ay, az);
-                csvFile.write(s.getBytes());
+                csvStream.write(s.getBytes());
             } catch (IOException e) {
                 e.printStackTrace();
             }

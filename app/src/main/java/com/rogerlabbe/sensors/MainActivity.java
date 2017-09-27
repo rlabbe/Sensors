@@ -1,31 +1,26 @@
 package com.rogerlabbe.sensors;
 
 import android.Manifest;
-import android.content.Context;
-import android.content.Intent;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.media.MediaScannerConnection;
-import android.net.Uri;
 import android.os.Environment;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
     public static final String EXTRA_MESSAGE = "com.example.myfirstapp.MESSAGE";
@@ -40,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
     private String csvFilePath;
     boolean running = false;
     Button playButton;
+    Spinner speed;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,7 +55,13 @@ public class MainActivity extends AppCompatActivity {
         editAx = (TextView) findViewById(R.id.editText2);
         editAy = (TextView) findViewById(R.id.editText3);
         editAz = (TextView) findViewById(R.id.editText4);
-        playButton =  (Button)findViewById(R.id.button);
+        playButton =  (Button)findViewById(R.id.recordButton);
+
+        speed = (Spinner) findViewById(R.id.spinner);
+        String[] items = new String[]{"Slow", "Normal", "Game", "Fastest"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, items);
+        speed.setAdapter(adapter);
+        speed.setSelection(3);
 
         playButton.setText("Record");
         editText.setText("time: ");
@@ -72,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
         OpenFile(false);
         CloseFile();
     }
+
 
     public void OpenFile(boolean append) {
         File csvFile = new File(Environment.getExternalStoragePublicDirectory(
@@ -108,12 +111,24 @@ public class MainActivity extends AppCompatActivity {
     /** handle buttons */
     public void sendMessage(View view) {
         switch (view.getId()) {
-            case R.id.button:
+            case R.id.recordButton:
                 startStop();
                 break;
-            case R.id.button2:
-                CloseFile();
-                finish();
+            case R.id.quitButton:
+                if (!running) {
+                    CloseFile();
+                    finish();
+                } else {
+                    Toast.makeText(this, "Can't quit while recording", Toast.LENGTH_LONG).show();
+                }
+                break;
+            case R.id.eraseButton:
+                if (!running) {
+                    CloseFile();
+                    OpenFile(false);
+                } else {
+                    Toast.makeText(this, "Can't erase while recording", Toast.LENGTH_LONG).show();
+                }
                 break;
         }
     }
@@ -124,8 +139,23 @@ public class MainActivity extends AppCompatActivity {
             mAccelerometer = sensorService.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
             if (mAccelerometer != null) {
                 OpenFile(true);
-                sensorService.registerListener(mySensorEventListener, mAccelerometer,
-                        SensorManager.SENSOR_DELAY_FASTEST);
+                int delay = 0;
+                switch(speed.getSelectedItemPosition())  {
+                    case 0:
+                        delay = SensorManager.SENSOR_DELAY_UI;
+                        break;
+                    case 1:
+                        delay = SensorManager.SENSOR_DELAY_NORMAL;
+                        break;
+                    case 2:
+                        delay = SensorManager.SENSOR_DELAY_GAME;
+                        break;
+                    case 3:
+                        delay = SensorManager.SENSOR_DELAY_FASTEST;
+                        break;
+                }
+
+                sensorService.registerListener(mySensorEventListener, mAccelerometer, delay);
                 Log.i("Compass MainActivity", "Registerered for ACCELEROMETER Sensor");
                 running = true;
                 playButton.setText("Recording");
